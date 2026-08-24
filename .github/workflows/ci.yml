@@ -1,0 +1,87 @@
+name: CI
+
+# Two things are checked here, and they fail for different reasons.
+#
+# `unit` covers perf-delta.mjs — the only real logic in this repo. It is fast
+# and runs on everything.
+#
+# `selftest` runs the action against a live target, which is the check that
+# actually catches a broken action.yml: a composite action has no compiler, so
+# a mistyped step or a bad expression only shows up when it runs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: perf-delta tests
+        run: node --test test/perf-delta.test.mjs
+
+  selftest:
+    runs-on: ubuntu-latest
+    # `pull-requests: write` so the comment-upsert path is exercised on a real
+    # PR rather than only the run-summary fallback.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # A target to point the action at. `bowire mock` serves a schema-backed
+      # mock, which is enough for discovery, scan and test to have something
+      # real to talk to.
+      - name: Install Bowire CLI
+        run: |
+          dotnet tool install -g Kuestenlogik.Bowire.Tool
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Start a mock target
+        run: |
+          cat > petstore.json <<'JSON'
+          { "openapi": "3.0.0",
+            "info": { "title": "Selftest", "version": "1.0.0" },
+            "paths": { "/ping": { "get": { "responses": { "200": { "description": "ok" } } } } } }
+          JSON
+          bowire mock --schema petstore.json --port 5099 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:5099/ping >/dev/null && break
+            sleep 1
+          done
+
+      # No `base-snapshot`: the API-delta section needs `bowire diff`, which is
+      # not in a published release yet (it landed after the v2.4.0 tag). The
+      # section switches itself off, and the remaining ones are exercised.
+      # Restore this input once a release carries `bowire diff`.
+      - name: Run the action against the mock
+        id: report
+        uses: ./
+        with:
+          target: http://localhost:5099
+          protocol: rest
+          scan: 'true'
+          fail-on-findings: 'none'
+          fail-on-schema: 'none'
+          fail-on-tests: 'none'
+          fail-on-perf: 'none'
+
+      - name: The action must report a status
+        run: |
+          echo "status=${{ steps.report.outputs.status }}"
+          test -n "${{ steps.report.outputs.status }}"
