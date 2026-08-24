@@ -1,5 +1,7 @@
 name: 'Bowire PR report'
-description: 'Run `bowire diff` (API schema delta) + `bowire test` + `bowire scan` on a PR and post one updating comment with the API / test / security impact.'
+# Keep this under 125 characters — the Marketplace rejects the listing above
+# that, and the message only appears once you tick the publish box.
+description: 'Run Bowire on a pull request and post one self-updating comment: API delta, tests, security findings, perf.'
 author: 'Küstenlogik'
 branding:
   icon: 'git-pull-request'
