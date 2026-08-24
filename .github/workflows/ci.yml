@@ -69,6 +69,8 @@ jobs:
       # not in a published release yet (it landed after the v2.4.0 tag). The
       # section switches itself off, and the remaining ones are exercised.
       # Restore this input once a release carries `bowire diff`.
+      # Gates all off: this run checks that the action WIRES UP, not that the
+      # mock is clean. A finding in the sample schema must not turn CI red.
       - name: Run the action against the mock
         id: report
         uses: ./
@@ -76,12 +78,16 @@ jobs:
           target: http://localhost:5099
           protocol: rest
           scan: 'true'
-          fail-on-findings: 'none'
           fail-on-schema: 'none'
-          fail-on-tests: 'none'
-          fail-on-perf: 'none'
+          fail-on-tests: 'never'
+          fail-on-scan: 'never'
+          fail-on-perf: 'never'
 
-      - name: The action must report a status
+      # An unknown input is only a warning in a composite action, and a typo in
+      # an output reference silently yields an empty string — so both are
+      # asserted here rather than assumed. This check caught exactly those two
+      # mistakes on the first run.
+      - name: The action must report an overall status
         run: |
-          echo "status=${{ steps.report.outputs.status }}"
-          test -n "${{ steps.report.outputs.status }}"
+          echo "overall-status=${{ steps.report.outputs.overall-status }}"
+          test -n "${{ steps.report.outputs.overall-status }}"
