@@ -73,10 +73,25 @@ action release.
 Semver tags plus a moving `v1` alias. Pin `@v1` to get fixes automatically, or a
 full tag like `@v1.0.0` to freeze.
 
-## Inputs and outputs
+## Outputs
 
-See [`action.yml`](action.yml) — every input carries its own description, and
-the outputs (`status`, plus the per-section verdicts) are documented there.
+| Output | Value |
+|---|---|
+| `overall-status` | `pass` or `fail` — the combined verdict across every enabled gate |
+| `schema-status` | `pass` or `fail` for the API-delta section alone |
+| `report-path` | Path to the assembled markdown report, for uploading as an artifact |
+
+```yaml
+      - uses: Kuestenlogik/bowire-action@v1
+        id: report
+        with:
+          target: http://localhost:5080
+      - run: echo "gate says ${{ steps.report.outputs.overall-status }}"
+```
+
+## Inputs
+
+See [`action.yml`](action.yml) — every input carries its own description.
 
 ## License
 
