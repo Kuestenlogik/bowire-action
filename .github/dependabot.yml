@@ -1,0 +1,21 @@
+version: 2
+
+# Only the workflow pins, and that is the whole surface on purpose: this repo
+# is a composite action plus one standalone `.mjs` script with no manifest, so
+# there is no npm or NuGet graph to watch. Dependabot reads the `uses:` lines
+# in action.yml as well as in .github/workflows, which is exactly what a
+# published action needs — a stale `actions/checkout` here ships to every
+# consumer of the Marketplace listing.
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(actions)"
