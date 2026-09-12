@@ -318,7 +318,7 @@ runs:
 
     # ---- Post (PR) or summarise (no PR) ----------------------------------
     - name: Upsert PR comment
-      uses: actions/github-script@v7
+      uses: actions/github-script@v9
       with:
         github-token: ${{ inputs.github-token }}
         script: |
