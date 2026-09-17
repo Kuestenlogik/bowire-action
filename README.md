@@ -40,9 +40,12 @@ starting point — add inputs to light up more of the report.
 | **Security** | `scan` (default `true`) | Add `scan-baseline` to show new vs. fixed findings instead of a flat list. |
 | **Perf** | `test-baseline` | A base-branch JUnit XML from an earlier `bowire test --junit`. |
 
-Gates are per section — `fail-on-schema`, `fail-on-tests`, `fail-on-findings`,
+Gates are per section — `fail-on-schema`, `fail-on-tests`, `fail-on-scan`,
 `fail-on-perf` — so a security regression can fail the check while a latency
-wobble only annotates. `perf-threshold-pct` and `perf-threshold-ms` both have to
+wobble only annotates. The status column tells the two apart: 🟢 nothing to
+report, 🟠 something was found and this gate lets it through (the cell names
+the gate and its value), 🔴 the gate tripped and the check fails. A failed test
+under `fail-on-tests: never` is 🟠, never 🟢. `perf-threshold-pct` and `perf-threshold-ms` both have to
 be cleared before a latency move is reported, which keeps runner noise on very
 fast tests out of the comment.
 

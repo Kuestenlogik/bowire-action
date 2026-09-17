@@ -172,6 +172,13 @@ runs:
         [ -n "$PROTOCOL" ] && PROTO_ARGS=(--protocol "$PROTOCOL")
         bowire diff snapshot "$TARGET" "${PROTO_ARGS[@]}" -o head.snapshot.json
         bowire diff --base "$BASE_SNAPSHOT" --head head.snapshot.json --format markdown -o schema.md
+        # What happened, apart from what the gate makes of it: the
+        # markdown says "schema identical" when nothing moved.
+        if grep -qi 'schema identical' schema.md; then
+          echo "changed=0" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=1" >> "$GITHUB_OUTPUT"
+        fi
         # Separate call for the gate so the markdown render is never gated away.
         if bowire diff --base "$BASE_SNAPSHOT" --head head.snapshot.json --fail-on "$FAIL_ON" -o schema.json; then
           echo "status=pass" >> "$GITHUB_OUTPUT"
@@ -291,21 +298,57 @@ runs:
       shell: bash
       env:
         SCHEMA_STATUS: ${{ steps.schema.outputs.status }}
+        SCHEMA_CHANGED: ${{ steps.schema.outputs.changed }}
         TESTS_STATUS: ${{ steps.tests.outputs.status }}
+        TESTS_FAILED: ${{ steps.tests.outputs.failed }}
+        TESTS_TOTAL: ${{ steps.tests.outputs.total }}
         SCAN_STATUS: ${{ steps.scan.outputs.status }}
+        SCAN_FINDINGS: ${{ steps.scan.outputs.findings }}
         PERF_STATUS: ${{ steps.perf.outputs.status }}
+        PERF_REGRESSIONS: ${{ steps.perf.outputs.regressions }}
+        FAIL_ON_SCHEMA: ${{ inputs.fail-on-schema }}
+        FAIL_ON_TESTS: ${{ inputs.fail-on-tests }}
+        FAIL_ON_SCAN: ${{ inputs.fail-on-scan }}
+        FAIL_ON_PERF: ${{ inputs.fail-on-perf }}
       run: |
-        icon() { [ "$1" = "fail" ] && printf '🔴' || printf '🟢'; }
+        # The status says what happened; the gate says what the check
+        # made of it. The two used to be one icon, and a section whose
+        # gate was `never` showed green over a failed test — the reader
+        # saw a pass where the section had found a failure and had been
+        # told not to mind. Now: 🟢 nothing to report, 🟠 something to
+        # report that this gate lets through (and which gate), 🔴 the
+        # gate tripped.
+        #   $1 gate status (pass/fail)  $2 anything found (0/1)
+        #   $3 what was found, as text  $4 the gate input's name  $5 its value
+        cell() {
+          if [ "$1" = "fail" ]; then printf '🔴 %s' "$3"
+          elif [ "$2" != "0" ] && [ -n "$2" ]; then printf '🟠 %s · not gated (`%s: %s`)' "$3" "$4" "$5"
+          else printf '🟢 %s' "$3"
+          fi
+        }
+        plural() { [ "$1" = "1" ] && printf '%s %s' "$1" "$2" || printf '%s %ss' "$1" "$2"; }
         {
           echo "<!-- bowire-pr-bot -->"
           echo "## Bowire PR report"
           echo ""
           echo "| Section | Status |"
           echo "| --- | --- |"
-          [ -f schema.md ]       && echo "| API schema | $(icon "$SCHEMA_STATUS") |"
-          [ -f test-summary.md ] && echo "| Tests | $(icon "$TESTS_STATUS") |"
-          [ -f scan.md ]         && echo "| Security | $(icon "$SCAN_STATUS") |"
-          [ -f perf.md ]         && echo "| Perf | $(icon "$PERF_STATUS") |"
+          if [ -f schema.md ]; then
+            if [ "${SCHEMA_CHANGED:-0}" = "0" ]; then what="identical"; else what="changed"; fi
+            echo "| API schema | $(cell "$SCHEMA_STATUS" "${SCHEMA_CHANGED:-0}" "$what" fail-on-schema "$FAIL_ON_SCHEMA") |"
+          fi
+          if [ -f test-summary.md ]; then
+            if [ "${TESTS_FAILED:-0}" = "0" ]; then what="$(plural "${TESTS_TOTAL:-0}" test) passed"; else what="$(plural "$TESTS_FAILED" test) failed of ${TESTS_TOTAL:-0}"; fi
+            echo "| Tests | $(cell "$TESTS_STATUS" "${TESTS_FAILED:-0}" "$what" fail-on-tests "$FAIL_ON_TESTS") |"
+          fi
+          if [ -f scan.md ]; then
+            if [ "${SCAN_FINDINGS:-0}" = "0" ]; then what="no error-level findings"; else what="$(plural "$SCAN_FINDINGS" 'error-level finding')"; fi
+            echo "| Security | $(cell "$SCAN_STATUS" "${SCAN_FINDINGS:-0}" "$what" fail-on-scan "$FAIL_ON_SCAN") |"
+          fi
+          if [ -f perf.md ]; then
+            if [ "${PERF_REGRESSIONS:-0}" = "0" ]; then what="no regression"; else what="$(plural "$PERF_REGRESSIONS" regression)"; fi
+            echo "| Perf | $(cell "$PERF_STATUS" "${PERF_REGRESSIONS:-0}" "$what" fail-on-perf "$FAIL_ON_PERF") |"
+          fi
           echo ""
           if [ -f schema.md ]; then cat schema.md; echo ""; fi
           if [ -f test-summary.md ]; then cat test-summary.md; echo ""; fi
